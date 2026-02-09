@@ -5,23 +5,66 @@ import { PresentationForm } from "./PresentationForm";
 import { exportToPPTX } from "../lib/pptx";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download, RefreshCcw } from "lucide-react";
+import { type LayoutId } from "../lib/templates";
 import { type ThemeName } from "../lib/themes";
+import { renderChartToImage, createRoadmapConfig } from "../lib/charts";
+
 
 export const PresentationGenerator = () => {
+
   const [isLoading, setIsLoading] = useState(false);
   const [data, setData] = useState<any>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [currentLayout, setCurrentLayout] = useState<LayoutId>("default");
 
-  const handleGenerate = async (topic: string, slideCount: number, theme: ThemeName) => {
+
+  const handleGenerate = async (topic: string, slideCount: number, theme: ThemeName, layoutId: LayoutId, quantify: boolean) => {
     setIsLoading(true);
     setError(null);
     setData(null); // Clear previous result
+    setCurrentLayout(layoutId);
     try {
-      const result = await generatePresentation(topic, slideCount, theme);
+      const result = await generatePresentation(topic, slideCount, theme, quantify);
+
+
       // Force the generated theme to match the user's selection if the AI decides otherwise
       result.theme = theme; 
-      console.log("Generated Data:", result);
+
+      // 2. Process Charts if they exist
+      const slidesWithCharts = await Promise.all(result.slides.map(async (slide: any) => {
+          if (slide.chart) {
+              console.log("Generating chart for slide:", slide.title);
+              try {
+                  let config;
+                  if (slide.chart.type === 'roadmap' && slide.chart.data.milestones) {
+                      config = createRoadmapConfig(slide.chart.data.milestones);
+                  } else {
+                      config = {
+                          type: slide.chart.type,
+                          data: {
+                              labels: slide.chart.data.labels,
+                              datasets: [{
+                                  label: slide.title,
+                                  data: slide.chart.data.values,
+                                  backgroundColor: [
+                                      '#4F46E5', '#EC4899', '#F97316', '#10B981', '#8B5CF6'
+                                  ].slice(0, slide.chart.data.labels.length)
+                              }]
+                          }
+                      };
+                  }
+                  const chartImage = await renderChartToImage(config);
+                  // We treat the chart as a backgroundImage for the layout to "hijack" the image slot
+                  return { ...slide, backgroundImage: chartImage, isChart: true };
+              } catch (e) {
+                  console.error("Chart generation failed:", e);
+              }
+          }
+          return slide;
+      }));
+
+      result.slides = slidesWithCharts;
       setData(result);
       setCurrentSlide(0);
     } catch (err) {
@@ -36,10 +79,13 @@ export const PresentationGenerator = () => {
     }
   };
 
-  const downloadPPTX = async () => {
+  const downloadPPTX = () => {
     if (!data) return;
-    await exportToPPTX(data, data.theme);
+    
+    // Use the Standard Programmatic Engine
+    exportToPPTX(data, data.theme, currentLayout);
   };
+
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-12">
@@ -105,6 +151,7 @@ export const PresentationGenerator = () => {
                 >
                     <Download className="w-4 h-4" />
                     Download PPTX
+
                 </button>
             </div>
           </div>
@@ -115,6 +162,8 @@ export const PresentationGenerator = () => {
             onNext={() => setCurrentSlide(c => Math.min(c + 1, data.slides.length - 1))}
             onPrev={() => setCurrentSlide(c => Math.max(c - 1, 0))}
             themeName={data.theme || "modern"}
+            layoutId={currentLayout}
+
           />
 
           {/* Speaker Notes */}

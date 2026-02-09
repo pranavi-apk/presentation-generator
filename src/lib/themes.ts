@@ -1,4 +1,4 @@
-export type ThemeName = "modern" | "dark" | "nature" | "professional" | "cyberpunk";
+export type ThemeName = "modern" | "dark" | "nature" | "professional" | "cyberpunk" | "none";
 
 export interface Theme {
   name: ThemeName;
@@ -13,6 +13,17 @@ export interface Theme {
 }
 
 export const themes: Record<ThemeName, Theme> = {
+  none: {
+    name: "none",
+    background: "bg-white",
+    foreground: "text-black",
+    accent: "text-black",
+    card: "", // No card style
+    slideBackground: "", // No slide background
+    font: "font-sans",
+    borderRadius: "",
+    baseFont: "Arial",
+  },
   modern: {
     name: "modern",
     background: "bg-gray-100",

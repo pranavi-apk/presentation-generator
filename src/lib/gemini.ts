@@ -27,7 +27,7 @@ const slideSchema = {
         properties: {
           layout: { 
             type: "string", 
-            enum: ["title", "content", "image-text"],
+            enum: ["title", "content", "image-text", "tableOfContents"],
             description: "Layout type of the slide" 
           },
           title: { type: "string", description: "Title of the slide" },
@@ -40,26 +40,59 @@ const slideSchema = {
             type: "string", 
             description: "A valid Pexels search keyword to find an image for this slide (if layout is image-text)." 
           },
-          speakerNotes: { type: "string", description: "Notes for the presenter" }
+          speakerNotes: { type: "string", description: "Notes for the presenter" },
+          chart: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["bar", "pie", "roadmap"] },
+              data: {
+                type: "object",
+                properties: {
+                  labels: { type: "array", items: { type: "string" } },
+                  values: { type: "array", items: { type: "number" } },
+                  milestones: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        label: { type: "string" },
+                        date: { type: "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
-        required: ["layout", "title", "content", "speakerNotes", "imageKeyword"]
+        required: ["layout", "title", "content", "speakerNotes"]
       }
     }
   },
   required: ["title", "theme", "slides"]
 };
 
-export const generatePresentation = async (topic: string, slideCount: number = 8, theme?: string) => {
+export const generatePresentation = async (topic: string, slideCount: number = 8, theme?: string, quantify: boolean = false) => {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `
       Create a professional presentation about: "${topic}".
       Generate exactly ${slideCount} slides.
-      The first slide should be a Title slide.
-      Includes a mix of Content slides and Image+Text slides.
-      For Image+Text slides, provide a SINGLE search keyword for Pexels (e.g. "office", "code", "nature").
-      ${theme && theme !== 'auto' ? `Use the "${theme}" theme style for content.` : 'Select a theme that fits the mood of the topic (e.g. Nature for biology, Cyberpunk for AI).'}
+      The first slide MUST be a "title" slide.
+      Include a "tableOfContents" slide early on.
+      Includes a mix of "content" slides and "image-text" slides.
+      
+      ${quantify ? `
+      CRITICAL: You MUST include at least 2 data-driven slides with a "chart" property.
+      - Use "bar" or "pie" for statistical data (require "labels" and "values").
+      - Use "roadmap" for timelines (require "milestones" with "label" and "date").
+      ` : ''}
+
+      For "image-text" slides, provide a SINGLE search keyword for Pexels in "imageKeyword".
+      
+      ${theme && theme !== 'auto' && theme !== 'none' ? `Use the "${theme}" theme style for content.` : 'Select a theme that fits the mood of the topic.'}
+      
       Output valid JSON matching this schema:
       ${JSON.stringify(slideSchema, null, 2)}
     `;
@@ -78,21 +111,14 @@ export const generatePresentation = async (topic: string, slideCount: number = 8
     const jsonString = text.replace(/```json\n|\n```/g, "").trim();
     const data = JSON.parse(jsonString);
 
-    console.log("Raw Gemini Data:", data);
-
     // Fetch images for slides that need them
     const slidesWithImages = await Promise.all(data.slides.map(async (slide: any) => {
-        if (slide.layout === "image-text") {
-            const keyword = slide.imageKeyword || slide.title;
-            console.log(`Fetching image for: "${keyword}"`);
-            
+        if (slide.layout === "image-text" || slide.backgroundImage) {
+            const keyword = slide.imageKeyword || slide.title || topic;
             try {
                 const imageUrl = await fetchImage(keyword);
-                console.log(`Fetched: ${imageUrl}`);
                 return { ...slide, backgroundImage: imageUrl };
             } catch (e) {
-                console.error("Failed to fetch image:", e);
-                // Fallback image
                 return { ...slide, backgroundImage: "https://images.unsplash.com/photo-1557683316-973673baf926?w=800&auto=format&fit=crop" };
             }
         }
@@ -102,19 +128,12 @@ export const generatePresentation = async (topic: string, slideCount: number = 8
     return { 
         ...data, 
         slides: slidesWithImages,
-        theme: theme && theme !== 'auto' ? theme : data.theme 
+        theme: theme && theme !== 'auto' && theme !== 'none' ? theme : data.theme 
     };
 
   } catch (error) {
     console.error("Error generating presentation:", error);
-    if (error instanceof Error) {
-        // @ts-ignore
-        if (error.response) {
-            // @ts-ignore
-            console.error("API Response Error:", error.response);
-        }
-      throw new Error(`Gemini API Error: ${error.message}`);
-    }
-    throw new Error("Unknown error occurred during generation");
+    throw error;
   }
 };
+
