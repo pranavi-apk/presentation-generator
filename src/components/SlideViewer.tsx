@@ -181,9 +181,6 @@ const EditorialLayout = ({ slide, theme, index }: { slide: Slide, theme: any, in
     </div>
 );
 
-
-// --- NEO-FLUX LAYOUT (Canva Style) ---
-
 // --- NEW CANVA-STYLE TEMPLATES ---
 
 const PlayfulLayout = ({ slide, theme, index }: { slide: Slide, theme: any, index: number }) => (

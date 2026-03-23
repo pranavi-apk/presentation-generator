@@ -8,7 +8,7 @@ import { type LayoutId, templates } from "../lib/templates";
 import { TemplatePreview } from "./TemplatePreview";
 
 interface PresentationFormProps {
-  onGenerate: (topic: string, slideCount: number, theme: ThemeName, layoutId: LayoutId, quantify: boolean) => void;
+  onGenerate: (topic: string, slideCount: number, theme: ThemeName, layoutId: LayoutId, quantify: boolean, isAiMode: boolean, aiStyle: "creative" | "professional", language: string) => void;
   isLoading: boolean;
 }
 
@@ -18,23 +18,34 @@ export const PresentationForm = ({ onGenerate, isLoading }: PresentationFormProp
   const [slideCount, setSlideCount] = useState(8);
   
   // Design Mode State: 'theme' (Color) vs 'template' (Layout)
-  const [designMode, setDesignMode] = useState<"theme" | "template">("theme");
+  const [designMode, setDesignMode] = useState<"theme" | "template" | "ai">("theme");
   
   // Initialize as empty string to force explicit selection
   const [theme, setTheme] = useState<ThemeName | "">("modern");
   const [layoutId, setLayoutId] = useState<LayoutId>("default");
   const [isQuantified, setIsQuantified] = useState(false);
+  const [aiStyle, setAiStyle] = useState<"creative" | "professional">("creative");
+  const [language, setLanguage] = useState("English");
+
+  const LANGUAGES = [
+    "English", "Spanish", "French", "German", "Italian", 
+    "Portuguese", "Dutch", "Russian", "Mandarin Chinese", 
+    "Cantonese", "Japanese", "Korean", "Hindi", "Arabic", "Bengali"
+  ];
 
 
-  const handleModeSwitch = (mode: "theme" | "template") => {
+  const handleModeSwitch = (mode: "theme" | "template" | "ai") => {
       setDesignMode(mode);
       // Reset state for the new mode to prevent carry-over
       if (mode === "theme") {
           setLayoutId("default");
           setTheme(""); // Force user to pick a theme
-      } else {
+      } else if (mode === "template") {
           setTheme("none"); // COMPLETELY NEUTRAL
           setLayoutId("swiss"); // Default to first template, not 'default'
+      } else {
+          setTheme("none");
+          setLayoutId("default");
       }
   };
 
@@ -45,10 +56,12 @@ export const PresentationForm = ({ onGenerate, isLoading }: PresentationFormProp
     // Strict Mode Logic:
     if (designMode === "theme") {
         if (!theme) return; // Prevent submission if no theme selected
-        onGenerate(topic, slideCount, theme as ThemeName, "default", isQuantified);
-    } else {
+        onGenerate(topic, slideCount, theme as ThemeName, "default", isQuantified, false, "professional", language);
+    } else if (designMode === "template") {
         // If Template Mode, enforce 'none' theme to avoid mixing
-        onGenerate(topic, slideCount, "none", layoutId, isQuantified);
+        onGenerate(topic, slideCount, "none", layoutId, isQuantified, false, "professional", language);
+    } else {
+        onGenerate(topic, slideCount, "none", "default", isQuantified, true, aiStyle, language);
     }
   };
 
@@ -72,17 +85,32 @@ export const PresentationForm = ({ onGenerate, isLoading }: PresentationFormProp
           />
         </div>
 
-        <div className="space-y-2">
-            <label className="text-sm font-medium text-muted-foreground ml-1">Number of Slides</label>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              className="w-full p-4 bg-secondary/50 border border-border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-              value={slideCount}
-              onChange={(e) => setSlideCount(parseInt(e.target.value) || 5)}
-              required
-            />
+        <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground ml-1">Number of Slides</label>
+                <input
+                type="number"
+                min={1}
+                max={20}
+                className="w-full p-4 bg-secondary/50 border border-border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                value={slideCount}
+                onChange={(e) => setSlideCount(parseInt(e.target.value) || 5)}
+                required
+                />
+            </div>
+            
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground ml-1">Language</label>
+                <select
+                  className="w-full p-4 bg-secondary/50 border border-border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                >
+                  {LANGUAGES.map(lang => (
+                    <option key={lang} value={lang}>{lang}</option>
+                  ))}
+                </select>
+            </div>
         </div>
 
         {/* Quantify Data Toggle */}
@@ -113,20 +141,27 @@ export const PresentationForm = ({ onGenerate, isLoading }: PresentationFormProp
         {/* MODE SWITCH */}
         <div className="space-y-3 pt-2">
             <label className="text-sm font-medium text-muted-foreground ml-1">Choose your Style</label>
-            <div className="grid grid-cols-2 bg-secondary/50 p-1 rounded-xl border border-border">
+            <div className="grid grid-cols-3 bg-secondary/50 p-1 rounded-xl border border-border">
                 <button
                     type="button"
                     onClick={() => handleModeSwitch("theme")}
                     className={`py-2 px-4 rounded-lg text-sm font-medium transition-all ${designMode === "theme" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
-                    Color Theme
+                    Themes
                 </button>
                 <button
                     type="button"
                     onClick={() => handleModeSwitch("template")}
                     className={`py-2 px-4 rounded-lg text-sm font-medium transition-all ${designMode === "template" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
-                    Design Template
+                    Templates
+                </button>
+                <button
+                    type="button"
+                    onClick={() => handleModeSwitch("ai")}
+                    className={`py-2 px-4 rounded-lg text-sm font-medium transition-all ${designMode === "ai" ? "bg-card shadow-sm text-primary font-bold" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                    ✨ AI Mode
                 </button>
             </div>
         </div>
@@ -149,7 +184,7 @@ export const PresentationForm = ({ onGenerate, isLoading }: PresentationFormProp
                 </select>
                 <p className="text-xs text-muted-foreground ml-1">Applies color palette to the Standard layout.</p>
             </div>
-        ) : (
+        ) : designMode === 'template' ? (
             <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                 <label className="text-sm font-medium text-muted-foreground ml-1">Select Layout Template</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -168,7 +203,44 @@ export const PresentationForm = ({ onGenerate, isLoading }: PresentationFormProp
                     ))}
                 </div>
              </div>
+        ) : (
+             <div className="p-6 bg-primary/5 rounded-xl border border-primary/20 space-y-4 animate-in fade-in zoom-in-95 duration-500">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-primary">
+                        <Sparkles className="w-5 h-5" />
+                        <span className="font-bold">AI-Designer Mode</span>
+                    </div>
+                </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setAiStyle("creative")}
+                        className={clsx(
+                            "p-3 rounded-lg border-2 transition-all text-left group",
+                            aiStyle === "creative" ? "border-primary bg-primary/10 shadow-sm" : "border-border hover:border-primary/40 text-muted-foreground"
+                        )}
+                    >
+                        <div className={clsx("font-bold text-sm", aiStyle === "creative" ? "text-primary" : "")}>Creative</div>
+                        <div className="text-[10px] opacity-70">Gradients & Asymmetry</div>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setAiStyle("professional")}
+                        className={clsx(
+                            "p-3 rounded-lg border-2 transition-all text-left group",
+                            aiStyle === "professional" ? "border-primary bg-primary/10 shadow-sm" : "border-border hover:border-primary/40 text-muted-foreground"
+                        )}
+                    >
+                        <div className={clsx("font-bold text-sm", aiStyle === "professional" ? "text-primary" : "")}>Professional</div>
+                        <div className="text-[10px] opacity-70">Clean & Structured</div>
+                    </button>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground leading-relaxed px-1">
+                    Gemini will generate high-density slides (50-80 words) with {aiStyle === 'creative' ? 'dynamic artistic layouts' : 'premium corporate structure'} and strict contrast rules.
+                </p>
+            </div>
         )}
       </div>
 

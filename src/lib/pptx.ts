@@ -16,6 +16,18 @@ const removeMarkdown = (text: string) => {
   return text.replace(/\*\*/g, "").replace(/\*/g, "").replace(/`/g, "").trim();
 };
 
+const isDark = (hex: string) => {
+    const cleanHex = hex.replace('#', '');
+    if (cleanHex.length !== 6) return true; // Default to dark background assumptions if unsure
+    const rgb = parseInt(cleanHex, 16);
+    const r = (rgb >> 16) & 0xff;
+    const g = (rgb >>  8) & 0xff;
+    const b = (rgb >>  0) & 0xff;
+    // Standard Luminance Formula
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return luma < 140; 
+};
+
 // Helper to get layout-specific font setting removed as it was unused and handled in-flow
 
 
@@ -250,10 +262,67 @@ export const exportToPPTX = async (presentation: any, themeName: string = "moder
             }
 
 
+      // --- AI DESIGNED FALLBACKS ---
+      } else if (presentation.isAiDesigned && slideData.pptxData) {
+          const ai = slideData.pptxData;
+          const bgHex = ai.backgroundColor || "#FFFFFF";
+          const tc = ai.textColor?.replace('#', '') || (isDark(bgHex) ? "FFFFFF" : "333333");
+          const bg = bgHex.replace('#', '');
+          
+          slide.background = { color: bg };
+          
+          if (ai.layout === 'hero') {
+              slide.addText(title, { 
+                  x: 1, y: 2, w: 8, h: 1.5, 
+                  fontSize: 54, bold: true, align: 'center', color: tc, fontFace: 'Arial Black' 
+              });
+              if (points && points.length > 0) {
+                  slide.addText(points.join(" • "), { 
+                      x: 1, y: 3.5, w: 8, h: 0.5, 
+                      fontSize: 24, align: 'center', color: tc, transparency: 30 
+                  });
+              }
+          } else if (ai.layout === 'grid') {
+              slide.addText(title, { x: 0.5, y: 0.5, w: 9, h: 0.8, fontSize: 36, bold: true, color: tc });
+              points.forEach((p: string, i: number) => {
+                  const x = 0.5 + (i % 3) * 3.1;
+                  const y = 1.6 + Math.floor(i / 3) * 1.8;
+                  slide.addShape(pres.ShapeType.rect, { x, y, w: 2.9, h: 1.5, fill: { color: tc, transparency: 92 } });
+                  slide.addText(p, { x: x + 0.1, y: y + 0.1, w: 2.7, h: 1.3, fontSize: 14, color: tc, valign: 'middle', align: 'center' });
+              });
+          } else if (ai.layout === 'stats') {
+              slide.addText(title, { x: 0.5, y: 0.5, w: 9, h: 0.8, fontSize: 36, bold: true, color: tc, align: 'center' });
+              points.forEach((p: string, i: number) => {
+                  const x = 0.5 + (i * 3.1);
+                  const parts = p.split(':');
+                  const val = parts[0];
+                  const desc = parts[1] || "";
+                  slide.addText(val, { x, y: 2, w: 2.9, h: 1, fontSize: 64, bold: true, color: tc, align: 'center' });
+                  slide.addText(desc, { x, y: 3, w: 2.9, h: 1, fontSize: 16, color: tc, align: 'center' });
+              });
+          } else if (ai.layout === 'image-text') {
+              const imageRight = index % 2 === 0;
+              if (slideData.backgroundImage) {
+                  slide.addImage({ 
+                      path: slideData.backgroundImage, 
+                      x: imageRight ? 5.5 : 0.5, y: 0.5, w: 4, h: 4.6, 
+                      sizing: { type: 'cover', w: 4, h: 4.6 } 
+                  });
+              }
+              slide.addText(title, { x: imageRight ? 0.5 : 5.5, y: 0.5, w: 4.5, h: 1, fontSize: 40, bold: true, color: tc });
+              const bulletPoints = points.map((p: string) => ({ text: p, options: { bullet: true, color: tc, fontSize: 16 } }));
+              slide.addText(bulletPoints, { x: imageRight ? 0.5 : 5.5, y: 1.6, w: 4.5, h: 3.5 });
+          } else {
+              // Default AI behavior
+              slide.addText(title, { x: 0.5, y: 0.5, w: 9, h: 1, fontSize: 32, bold: true, color: tc });
+              const bulletPoints = points.map((p: string) => ({ text: p, options: { bullet: true, fontSize: 18, color: tc } }));
+              if (bulletPoints.length > 0) slide.addText(bulletPoints, { x: 0.5, y: 1.5, w: 9, h: 4 });
+          }
+
       // --- DEFAULT ---
       } else {
            slide.addText(title, { x: 0.5, y: 0.5, w: 9, h: 1, fontSize: 32, bold: true, color: theme.accent });
-           const bulletPoints = points.map((p) => ({ text: p, options: { bullet: true, fontSize: 18, color: theme.color } }));
+           const bulletPoints = points.map((p: string) => ({ text: p, options: { bullet: true, fontSize: 18, color: theme.color } }));
            if (bulletPoints.length > 0) slide.addText(bulletPoints, { x: 0.5, y: 1.5, w: 9, h: 4 });
            
            if (slideData.backgroundImage) {

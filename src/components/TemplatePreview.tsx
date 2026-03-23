@@ -49,31 +49,6 @@ export const TemplatePreview = ({ layoutId, isSelected }: TemplatePreviewProps) 
            </div>
         </div>
       )}
-
-       {/* Minimalist Layout Preview */}
-       {layoutId === "minimalist" && (
-        <div className="w-full h-full bg-white flex flex-col items-center justify-center p-4">
-           <div className="w-1/2 h-2 bg-slate-900 mb-2" />
-           <div className="w-16 h-0.5 bg-slate-200 mb-2" />
-           <div className="w-3/4 h-1 bg-slate-400 rounded-full mb-0.5" />
-           <div className="w-2/3 h-1 bg-slate-400 rounded-full" />
-        </div>
-      )}
-
-      {/* NeoFlux Layout Preview */}
-      {layoutId === "neoflux" && (
-        <div className="w-full h-full bg-slate-900 relative overflow-hidden">
-           <div className="absolute top-[-20%] right-[-20%] w-20 h-20 bg-violet-500/50 rounded-full blur-xl" />
-           <div className="absolute bottom-[-10%] left-[-10%] w-16 h-16 bg-fuchsia-500/40 rounded-full blur-lg" />
-           <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-3/4 h-1/2 bg-white/10 backdrop-blur-sm border border-white/10 rounded-lg p-2 flex flex-col gap-1">
-                 <div className="w-1/2 h-2 bg-gradient-to-r from-violet-400 to-fuchsia-400 rounded-full" />
-                 <div className="w-full h-1 bg-white/20 rounded-full mt-2" />
-                 <div className="w-2/3 h-1 bg-white/20 rounded-full" />
-              </div>
-           </div>
-        </div>
-      )}
     </div>
   );
 };
