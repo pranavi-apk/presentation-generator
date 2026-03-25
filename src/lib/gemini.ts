@@ -38,6 +38,37 @@ export const fetchImage = async (query: string) => {
   }
 };
 
+/**
+ * SECURITY SANDBOX: Validates that the generated HTML does not contain 
+ * harmful elements like scripts, iframes, or malicious event handlers.
+ */
+export const isHtmlSafe = (html: string): { safe: boolean; reason?: string } => {
+    // 1. Check for <script> tags
+    if (/<script/i.test(html)) return { safe: false, reason: "Contains <script> tags" };
+
+    // ALLOW: [CHART] and [IMAGE] placeholders
+    const sanitizedHtml = html.replace(/\[CHART\]|\[IMAGE\]/g, "");
+
+    // 2. Check for on* event handlers (e.g., onclick, onload)
+    if (/\son\w+\s*=/i.test(sanitizedHtml)) return { safe: false, reason: "Contains event handlers (on*)" };
+
+    // 3. Check for dangerous tags
+    const dangerousTags = ['iframe', 'embed', 'object', 'form', 'base', 'link', 'meta'];
+    for (const tag of dangerousTags) {
+        const regex = new RegExp(`<${tag}`, 'i');
+        if (regex.test(html)) return { safe: false, reason: `Contains forbidden tag: <${tag}>` };
+    }
+
+    // 4. Check for data: or javascript: URIs in src or href
+    if (/href\s*=\s*["']\s*(javascript|data):/i.test(html)) return { safe: false, reason: "Contains javascript: or data: URIs" };
+    if (/src\s*=\s*["']\s*(javascript|data):/i.test(html) && !/src\s*=\s*["']\s*data:image/i.test(html)) {
+        // Allow data:image for base64 images if needed, but otherwise block data:
+        return { safe: false, reason: "Contains dangerous data: URIs" };
+    }
+
+    return { safe: true };
+};
+
 const aiDesignSchema = {
   type: "object",
   properties: {
@@ -53,6 +84,20 @@ const aiDesignSchema = {
             description: "Full HTML for a 1920x1080 canvas using Tailwind. Start with <div class='w-[1920px] h-[1080px] border-[16px] relative ...'>" 
           },
           imageKeyword: { type: "string", description: "Search term for a real photo. MUST BE IN ENGLISH ONLY. MUST be highly specific to the exact slide content (e.g., 'holi powder' not 'festival')." },
+          chart: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["bar", "line", "pie", "roadmap"] },
+              data: {
+                type: "object",
+                properties: {
+                  labels: { type: "array", items: { type: "string" } },
+                  values: { type: "array", items: { type: "number" } },
+                  milestones: { type: "array", items: { type: "string" } }
+                }
+              }
+            }
+          },
           pptxData: {
             type: "object",
             properties: {
@@ -74,11 +119,13 @@ const aiDesignSchema = {
   required: ["title", "slides"]
 };
 
-export const generatePresentation = async (topic: string, slideCount: number, theme: string, quantify: boolean = false, language: string = "English") => {
+export const generatePresentation = async (topic: string, slideCount: number, theme: string, quantify: boolean = false, language: string = "English", pdfContent?: string) => {
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   
   const prompt = `
+    ${pdfContent ? `CONTEXT FROM UPLOADED PDF:\n${pdfContent}\n\n` : ""}
     Generate a presentation about "${topic}" with ${slideCount} slides.
+    ${pdfContent ? "Use the provided PDF context as the primary source of information. If the topic is broad, focus on the most relevant parts of the PDF." : ""}
     Theme: ${theme}.
     Language: ${language}. The entire presentation MUST be written in ${language}.
     ${quantify ? "Include data-driven insights. For at least 2 slides, include a 'chart' object with { type: 'bar' | 'line' | 'pie' | 'roadmap', data: { labels: string[], values: number[] } } (or { milestones: string[] } for roadmap)." : ""}
@@ -116,7 +163,7 @@ export const generatePresentation = async (topic: string, slideCount: number, th
   return { ...data, slides: slidesWithImages, tokensUsed };
 };
 
-export const generateAIDesignedPresentation = async (topic: string, slideCount: number, theme: string, aiStyle: "creative" | "professional" = "creative", language: string = "English") => {
+export const generateAIDesignedPresentation = async (topic: string, slideCount: number, theme: string, aiStyle: "creative" | "professional" = "creative", language: string = "English", pdfContent?: string, quantify: boolean = false) => {
   const model = genAI.getGenerativeModel({ 
     model: "gemini-2.5-flash",
     generationConfig: { 
@@ -206,8 +253,11 @@ export const generateAIDesignedPresentation = async (topic: string, slideCount: 
 
   const STYLE_INSTRUCTION = aiStyle === "creative" ? CREATIVE_PROMPT : PROFESSIONAL_PROMPT;
 
-  const prompt = `
+    const prompt = `
+        ${pdfContent ? `CONTEXT FROM UPLOADED PDF:\n${pdfContent}\n\n` : ""}
         Generate a ${slideCount}-slide presentation about "${topic}".
+        ${pdfContent ? "Use the provided PDF context as the primary source of information. Focus on the core message and data from the PDF." : ""}
+        ${quantify ? "Include data-driven insights. For at least 2 slides, include a 'chart' object in the slide data (type: bar | line | pie | roadmap). Ensure the chart data is realistic and relevant to the slide topic." : ""}
         Mode: AI-Designer Mode (Custom HTML).
         LANGUAGE: ${language}. All visible text (headings, body, lists) MUST be written perfectly in ${language}.
         
@@ -218,7 +268,11 @@ export const generateAIDesignedPresentation = async (topic: string, slideCount: 
         STRICT DESIGN RULES (AGENCY-GRADE):
         1. CANVAS & BORDERS: Fixed 1920x1080 (16:9). The root <div> MUST have a visible, thick outer border (e.g., 'border-[16px] border-slate-900', 'border-[24px] border-[color]'). EVERY SINGLE SLIDE MUST HAVE THIS OUTER BORDER.
         2. PERFECT COLOR COHESION: You MUST invent exactly 2-3 core colors (e.g., 'slate-900', 'rose-800', 'amber-100') for the ENTIRE presentation. EVERY SINGLE SLIDE MUST reuse these exact same 2-3 background and accent colors. DO NOT introduce random new colors (like neon yellow) on later slides. The presentation MUST look like a single unified brand. Include background accent blobs or shapes on layer \`z-0\`.
-        3. IMAGE CONTAINERS (\`[IMAGE]\`): If using a photo, wrap the EXACT string \`<img src="[IMAGE]">\` in a \`div\` with \`rounded-[2.5rem] border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden\`.
+        3. IMAGE & CHART CONTAINERS (\`[IMAGE]\` / \`[CHART]\`): 
+           - CRITICAL: Every \`img\` parent box MUST have \`overflow-hidden\`.
+           - If using a photo, wrap the EXACT string \`<img src="[IMAGE]" class="w-full h-full object-cover">\` in a \`div\` with \`rounded-[2.5rem] border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden\`.
+           - If using a chart, wrap the EXACT string \`<img src="[CHART]" class="w-full h-full object-contain">\` in a custom \`div\` container with \`overflow-hidden\`. Charts MUST use \`object-contain\` to avoid clipping data.
+           - Ensure containers for \`[CHART]\` are large enough (at least 50% width or height) and have internal padding to keep them away from slide borders.
         4. GUARANTEED TEXT CONTRAST (FAILING THIS RUINS THE PRESENTATION): 
            - RULE A: If your container background is DARK (e.g. bg-slate-900, bg-indigo-950, bg-black), EVERY text element inside MUST use 'text-white' or 'text-slate-50'.
            - RULE B: If your container background is LIGHT (e.g. bg-white, bg-slate-50, bg-rose-50), EVERY text element inside MUST use 'text-slate-900' or 'text-black'.
@@ -256,6 +310,20 @@ export const generateAIDesignedPresentation = async (topic: string, slideCount: 
   const data = JSON.parse(text);
 
   const slidesWithImages = await Promise.all(data.slides.map(async (slide: any) => {
+      // SECURITY CHECK: Validate HTML before processing
+      const securityCheck = isHtmlSafe(slide.contentHtml);
+      if (!securityCheck.safe) {
+          console.error(`Security violation in generated slide: ${securityCheck.reason}`);
+          // Neutralize the slide or throw error
+          slide.contentHtml = `<div class="w-[1920px] h-[1080px] bg-red-50 flex items-center justify-center text-red-600 font-bold border-[16px] border-red-200">
+              <div class="text-center">
+                  <h1 class="text-6xl mb-4">Security Warning</h1>
+                  <p class="text-2xl opacity-70">This slide was blocked by the Sandbox due to suspicious content.</p>
+                  <p class="text-lg mt-2 font-mono opacity-50">Reason: ${securityCheck.reason}</p>
+              </div>
+          </div>`;
+      }
+
       if (slide.imageKeyword) {
           try {
               const imageUrl = await fetchImage(slide.imageKeyword);

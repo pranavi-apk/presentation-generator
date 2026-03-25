@@ -6,9 +6,11 @@ import clsx from "clsx";
 import { type ThemeName, themes } from "../lib/themes";
 import { type LayoutId, templates } from "../lib/templates";
 import { TemplatePreview } from "./TemplatePreview";
+import { FileText, X, AlertCircle } from "lucide-react";
+import { extractTextFromPdf } from "../lib/pdf";
 
 interface PresentationFormProps {
-  onGenerate: (topic: string, slideCount: number, theme: ThemeName, layoutId: LayoutId, quantify: boolean, isAiMode: boolean, aiStyle: "creative" | "professional", language: string) => void;
+  onGenerate: (topic: string, slideCount: number, theme: ThemeName, layoutId: LayoutId, quantify: boolean, isAiMode: boolean, aiStyle: "creative" | "professional", language: string, pdfContent?: string) => void;
   isLoading: boolean;
 }
 
@@ -26,6 +28,12 @@ export const PresentationForm = ({ onGenerate, isLoading }: PresentationFormProp
   const [isQuantified, setIsQuantified] = useState(false);
   const [aiStyle, setAiStyle] = useState<"creative" | "professional">("creative");
   const [language, setLanguage] = useState("English");
+  
+  // PDF Upload State
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfText, setPdfText] = useState<string>("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const LANGUAGES = [
     "English", "Spanish", "French", "German", "Italian", 
@@ -49,6 +57,40 @@ export const PresentationForm = ({ onGenerate, isLoading }: PresentationFormProp
       }
   };
 
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      setPdfError("Please upload a PDF file.");
+      return;
+    }
+
+    setPdfFile(file);
+    setIsAnalyzing(true);
+    setPdfError(null);
+
+    try {
+      const text = await extractTextFromPdf(file);
+      setPdfText(text);
+      // Auto-fill topic if empty
+      if (!topic) {
+        setTopic(`Presentation based on ${file.name}`);
+      }
+    } catch (err) {
+      console.error("PDF Extraction failed:", err);
+      setPdfError("Failed to extract text from PDF. Please try another file.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const removePdf = () => {
+    setPdfFile(null);
+    setPdfText("");
+    setPdfError(null);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!topic.trim()) return;
@@ -56,12 +98,12 @@ export const PresentationForm = ({ onGenerate, isLoading }: PresentationFormProp
     // Strict Mode Logic:
     if (designMode === "theme") {
         if (!theme) return; // Prevent submission if no theme selected
-        onGenerate(topic, slideCount, theme as ThemeName, "default", isQuantified, false, "professional", language);
+        onGenerate(topic, slideCount, theme as ThemeName, "default", isQuantified, false, "professional", language, pdfText);
     } else if (designMode === "template") {
         // If Template Mode, enforce 'none' theme to avoid mixing
-        onGenerate(topic, slideCount, "none", layoutId, isQuantified, false, "professional", language);
+        onGenerate(topic, slideCount, "none", layoutId, isQuantified, false, "professional", language, pdfText);
     } else {
-        onGenerate(topic, slideCount, "none", "default", isQuantified, true, aiStyle, language);
+        onGenerate(topic, slideCount, "none", "default", isQuantified, true, aiStyle, language, pdfText);
     }
   };
 
@@ -83,6 +125,63 @@ export const PresentationForm = ({ onGenerate, isLoading }: PresentationFormProp
             required
             autoFocus
           />
+        </div>
+
+        {/* PDF Upload Section */}
+        <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground ml-1">Or Upload PDF Content (Optional)</label>
+            {!pdfFile ? (
+                <div className="relative group">
+                    <input
+                        type="file"
+                        accept=".pdf"
+                        onChange={handlePdfUpload}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    <div className="w-full p-8 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center gap-3 bg-secondary/20 group-hover:bg-secondary/40 transition-all group-hover:border-primary/50">
+                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                            <FileText className="w-6 h-6" />
+                        </div>
+                        <div className="text-center">
+                            <p className="text-sm font-semibold">Click or drag PDF here</p>
+                            <p className="text-xs text-muted-foreground">We'll extract content for your slides</p>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-center justify-between p-4 bg-primary/5 border border-primary/20 rounded-xl animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                            <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold truncate max-w-[200px]">{pdfFile.name}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                                {isAnalyzing ? (
+                                    <span className="flex items-center gap-1">
+                                        <Loader2 className="w-3 h-3 animate-spin" /> Analyzing content...
+                                    </span>
+                                ) : (
+                                    `${(pdfFile.size / 1024 / 1024).toFixed(2)} MB • Text extracted`
+                                )}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={removePdf}
+                        className="p-2 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg transition-colors"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+            {pdfError && (
+                <div className="flex items-center gap-2 text-destructive text-xs mt-1 ml-1">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {pdfError}
+                </div>
+            )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">

@@ -30,6 +30,9 @@ export const renderChartToImage = (config: any): Promise<string> => {
                 animation: false as any,
                 responsive: false,
                 devicePixelRatio: 2, // High DPI for crisp PPTX images
+                layout: {
+                    padding: 50 // Global padding to prevent clipping at edges
+                },
                 plugins: {
                     ...config.options?.plugins,
                     legend: {

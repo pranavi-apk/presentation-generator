@@ -22,7 +22,7 @@ export const PresentationGenerator = () => {
   const [currentLayout, setCurrentLayout] = useState<LayoutId>("default");
 
 
-  const handleGenerate = async (topic: string, slideCount: number, theme: ThemeName, layoutId: LayoutId, quantify: boolean, isAiMode: boolean = false, aiStyle: "creative" | "professional" = "professional", language: string = "English") => {
+  const handleGenerate = async (topic: string, slideCount: number, theme: ThemeName, layoutId: LayoutId, quantify: boolean, isAiMode: boolean = false, aiStyle: "creative" | "professional" = "professional", language: string = "English", pdfContent?: string) => {
     setIsLoading(true);
     setError(null);
     setData(null); // Clear previous result
@@ -30,9 +30,9 @@ export const PresentationGenerator = () => {
     try {
       let result;
       if (isAiMode) {
-          result = await generateAIDesignedPresentation(topic, slideCount, theme, aiStyle, language);
+          result = await generateAIDesignedPresentation(topic, slideCount, theme, aiStyle, language, pdfContent, quantify);
       } else {
-          result = await generatePresentation(topic, slideCount, theme, quantify, language);
+          result = await generatePresentation(topic, slideCount, theme, quantify, language, pdfContent);
       }
 
 
@@ -63,6 +63,13 @@ export const PresentationGenerator = () => {
                       };
                   }
                   const chartImage = await renderChartToImage(config);
+                  
+                  // For AI Designer Mode, we need to inject the chart into the custom HTML
+                  if (result.isAiDesigned && slide.contentHtml) {
+                      const chartPlaceholder = /\[CHART\]/g.test(slide.contentHtml) ? '[CHART]' : '[IMAGE]';
+                      slide.contentHtml = slide.contentHtml.replace(chartPlaceholder, chartImage);
+                  }
+
                   // We treat the chart as a backgroundImage for the layout to "hijack" the image slot
                   return { ...slide, backgroundImage: chartImage, isChart: true };
               } catch (e) {
