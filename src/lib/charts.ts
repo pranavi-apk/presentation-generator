@@ -25,6 +25,20 @@ export const renderChartToImage = (config: any): Promise<string> => {
         // Deep copy and disable animations for instant rendering
         const finalConfig: ChartConfiguration = {
             ...config,
+            plugins: [
+                ...(config.plugins || []),
+                {
+                    id: 'custom_canvas_background_color',
+                    beforeDraw: (chart: any) => {
+                        const {ctx} = chart;
+                        ctx.save();
+                        ctx.globalCompositeOperation = 'destination-over';
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, chart.width, chart.height);
+                        ctx.restore();
+                    }
+                }
+            ],
             options: {
                 ...config.options,
                 animation: false as any,
@@ -44,7 +58,7 @@ export const renderChartToImage = (config: any): Promise<string> => {
                     }
                 }
             }
-        };
+        } as any;
 
         try {
             const chart = new Chart(ctx, finalConfig);

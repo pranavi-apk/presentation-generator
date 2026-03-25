@@ -71,10 +71,14 @@ export const PresentationGenerator = () => {
                   }
 
                   // We treat the chart as a backgroundImage for the layout to "hijack" the image slot
-                  return { ...slide, backgroundImage: chartImage, isChart: true };
+                  return { ...slide, backgroundImage: chartImage, isChart: true, layout: 'image-text' };
               } catch (e) {
                   console.error("Chart generation failed:", e);
               }
+          }
+          // Fallback if AI asked for image-text but forgot to provide an image
+          if (slide.layout === 'image-text' && !slide.backgroundImage) {
+              slide.backgroundImage = "https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&auto=format&fit=crop";
           }
           return slide;
       }));

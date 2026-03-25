@@ -9,7 +9,7 @@ export const fetchImage = async (query: string) => {
   const PIXABAY_API_KEY = import.meta.env.VITE_PIXABAY_API_KEY;
   
   // Sanitize: Take only the first part before a semicolon or comma, and limit to 4 words
-  const sanitizedQuery = query.split(/[;,]/)[0].trim().split(/\s+/).slice(0, 4).join(" ");
+  const sanitizedQuery = query.split(/[;,:]/)[0].trim().split(/\s+/).slice(0, 4).join(" ");
   
   try {
     // 1. Try Unsplash (Higher Quality)
@@ -18,8 +18,13 @@ export const fetchImage = async (query: string) => {
         `https://api.unsplash.com/search/photos?query=${encodeURIComponent(sanitizedQuery)}&orientation=landscape&per_page=1`,
         { headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` } }
       );
-      const data = await response.json();
-      if (data.results?.[0]?.urls?.regular) return data.results[0].urls.regular;
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.results?.[0]?.urls?.regular) return data.results[0].urls.regular;
+      } else if (response.status === 403 || response.status === 429) {
+          console.warn("Unsplash rate limit exceeded or forbidden. Falling back...");
+      }
     }
 
     // 2. Try Pixabay (Fallback)
@@ -27,8 +32,11 @@ export const fetchImage = async (query: string) => {
       const response = await fetch(
         `https://pixabay.com/api/?key=${PIXABAY_API_KEY}&q=${encodeURIComponent(sanitizedQuery)}&image_type=photo&orientation=horizontal&safesearch=true&per_page=3`
       );
-      const data = await response.json();
-      if (data.hits?.[0]?.largeImageURL) return data.hits[0].largeImageURL;
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.hits?.[0]?.largeImageURL) return data.hits[0].largeImageURL;
+      }
     }
 
     return "https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&auto=format&fit=crop";
@@ -148,9 +156,13 @@ export const generatePresentation = async (topic: string, slideCount: number, th
   const result = await model.generateContent(prompt);
   const response = await result.response;
   const tokensUsed = response.usageMetadata?.totalTokenCount || 0;
-  const text = response.text();
-  const cleanJson = text.replace(/```json|```/g, "").trim();
-  const data = JSON.parse(cleanJson);
+  let text = response.text();
+  
+  // ROBUST JSON CLEANING
+  text = text.replace(/```json|```/g, "").trim();
+  text = text.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
+
+  const data = JSON.parse(text);
 
   const slidesWithImages = await Promise.all(data.slides.map(async (slide: any) => {
     if (slide.imageKeyword) {
@@ -306,7 +318,14 @@ export const generateAIDesignedPresentation = async (topic: string, slideCount: 
   const result = await model.generateContent(prompt);
   const response = await result.response;
   const tokensUsed = response.usageMetadata?.totalTokenCount || 0;
-  const text = response.text().replace(/```json|```/g, "").trim();
+  let text = response.text();
+  
+  // ROBUST JSON CLEANING
+  // 1. Remove markdown code blocks
+  text = text.replace(/```json|```/g, "").trim();
+  // 2. Remove control characters and fix common bad escapes
+  text = text.replace(/[\u0000-\u001F\u007F-\u009F]/g, ""); 
+  
   const data = JSON.parse(text);
 
   const slidesWithImages = await Promise.all(data.slides.map(async (slide: any) => {

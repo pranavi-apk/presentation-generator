@@ -59,7 +59,7 @@ const StandardLayout = ({ slide, theme, index }: { slide: Slide, theme: any, ind
                 theme.borderRadius,
                 index % 2 === 0 ? "order-2" : "order-1"
             )}>
-                {slide.backgroundImage && <img src={slide.backgroundImage} alt="slide" className="absolute inset-0 w-full h-full object-cover" />}
+                {slide.backgroundImage && <img src={slide.backgroundImage} alt="slide" className={clsx("absolute inset-0 w-full h-full", slide.isChart ? "object-contain p-4 bg-white" : "object-cover")} />}
             </div>
             </div>
         )}
@@ -115,8 +115,8 @@ const SwissLayout = ({ slide, theme, index }: { slide: Slide, theme: any, index:
                             <img 
                                 src={slide.backgroundImage} 
                                 className={clsx(
-                                    "absolute inset-0 w-full h-full object-cover",
-                                    !slide.isChart && "grayscale contrast-125"
+                                    "absolute inset-0 w-full h-full",
+                                    slide.isChart ? "object-contain p-4 bg-white" : "object-cover grayscale contrast-125"
                                 )} 
                             />
                         )}
@@ -156,7 +156,7 @@ const EditorialLayout = ({ slide, theme, index }: { slide: Slide, theme: any, in
                     )}
                 </div>
                 <div className={clsx("relative h-full overflow-hidden", index % 2 === 0 ? "order-2" : "order-1")}>
-                    <img src={slide.backgroundImage} className="w-full h-full object-cover" />
+                    <img src={slide.backgroundImage} className={clsx("w-full h-full", slide.isChart ? "object-contain p-6 bg-white" : "object-cover")} />
                     <div className="absolute inset-0 bg-[#000000]/5" />
                 </div>
              </div>
@@ -225,7 +225,7 @@ const PlayfulLayout = ({ slide, theme, index }: { slide: Slide, theme: any, inde
                            "absolute bottom-10 w-64 h-64 rounded-3xl overflow-hidden border-4 border-white shadow-lg",
                            index % 2 === 0 ? "right-10 rotate-3" : "left-10 -rotate-3"
                        )}>
-                           <img src={slide.backgroundImage} className="w-full h-full object-cover" />
+                           <img src={slide.backgroundImage} className={clsx("w-full h-full", slide.isChart ? "object-contain p-2 bg-white" : "object-cover")} />
                        </div>
                    )}
             </div>
@@ -276,7 +276,7 @@ const AbstractLayout = ({ slide, theme, index }: { slide: Slide, theme: any, ind
                      {slide.layout === 'image-text' && slide.backgroundImage && (
                          <div className={clsx("col-span-6 relative transition-all duration-700", index % 2 !== 0 ? "order-1" : "order-2")}>
                              <div className={clsx("absolute inset-0 bg-blue-500", index % 2 === 0 ? "translate-x-4 translate-y-4" : "-translate-x-4 translate-y-4")} />
-                             <img src={slide.backgroundImage} className="relative w-full h-full object-cover border-2 border-black" />
+                             <img src={slide.backgroundImage} className={clsx("relative w-full h-full border-2 border-black", slide.isChart ? "object-contain p-4 bg-white" : "object-cover")} />
                          </div>
                      )}
                  </div>
@@ -318,8 +318,8 @@ const RetroLayout = ({ slide, theme, index }: { slide: Slide, theme: any, index:
                             <img 
                                 src={slide.backgroundImage} 
                                 className={clsx(
-                                    "w-full h-full object-cover",
-                                    !slide.isChart && "sepia-[.4]"
+                                    "w-full h-full",
+                                    slide.isChart ? "object-contain p-2 bg-white" : "object-cover sepia-[.4]"
                                 )} 
                             />
                         </div>
